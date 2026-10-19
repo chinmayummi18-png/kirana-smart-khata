@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kirana Smart Khata & Invoice Suite</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary: #0F172A;
+            --accent: #2563EB;
+            --success: #16A34A;
+            --danger: #DC2626;
+            --bg: #F8FAFC;
+            --card: #FFFFFF;
+            --text: #1E293B;
+            --border: #E2E8F0;
+            --milk: #D97706;
+            --debtor: #991B1B;
+            --creditor: #1E40AF;
+            --profit: #047857;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding-bottom: 90px;
+        }
+
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 16px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        header h1 { font-size: 1.25rem; margin-bottom: 4px; }
+        #store-info-badge { font-size: 0.85rem; color: #93C5FD; cursor: pointer; }
+
+        .container { max-width: 600px; margin: 16px auto; padding: 0 12px; }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .milk-card { border: 2px dashed #F59E0B; background: #FFFBEB; }
+        .debtor-card { border-left: 4px solid var(--debtor); }
+        .creditor-card { border-left: 4px solid var(--creditor); }
+        .report-card { background: #EFF6FF; border: 1px solid #BFDBFE; }
+        .profit-card { background: #ECFDF5; border: 1px solid #A7F3D0; }
+        .invoice-card { background: #FFFFFF; border: 2px solid var(--accent); }
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            color: var(--primary);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            outline: none;
+            background: #FFF;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            background-color: var(--accent);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            margin-top: 6px;
+        }
+        .btn-success { background-color: var(--success); }
+        .btn-danger { background-color: var(--danger); padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; }
+        .btn-warning { background-color: #D97706; padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; color: white; }
+        .btn-secondary { background-color: #64748B; }
+        .btn-milk { background-color: var(--milk); }
+        .btn-scanner { background-color: #4F46E5; }
+        .btn-pdf { background-color: #0284C7; font-size: 0.85rem; padding: 8px; margin-top: 8px; }
+        .btn-whatsapp { background-color: #25D366; text-decoration: none; display: inline-block; padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; color: white; margin-top: 4px;}
+
+        .action-btns { display: flex; gap: 6px; align-items: center; }
+
+        .report-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            text-align: center;
+            margin-top: 8px;
+        }
+        .report-box {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #DBEAFE;
+        }
+        .report-box span { font-size: 0.75rem; color: #64748B; display: block; }
+        .report-box strong { font-size: 1rem; color: var(--primary); }
+
+        #reader { width: 100%; margin-bottom: 12px; border-radius: 8px; overflow: hidden; }
+
+        .nav-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: white;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0;
+            z-index: 100;
+        }
+        .nav-item { text-align: center; font-size: 0.7rem; color: #64748B; cursor: pointer; flex: 1; }
+        .nav-item.active { color: var(--accent); font-weight: bold; }
+
+        .view { display: none; }
+        .view.active { display: block; }
+        .hidden { display: none !important; }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .list-item:last-child { border-bottom: none; }
+
+        .tag { display: inline-block; padding: 2px 8px; font-size: 0.75rem; border-radius: 4px; font-weight: 600; }
+        .tag-credit { background: #FEE2E2; color: #991B1B; }
+        .tag-paid { background: #DCFCE7; color: #166534; }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.85);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000; padding: 16px; overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Store Login / Signup Modal with Invoice Onboarding Details -->
+    <div id="login-modal" class="modal-overlay">
+        <div class="card" style="width: 100%; max-width: 420px; margin: auto;">
+            <h2>Kirana Cloud Portal & Invoice Setup</h2>
+            <p style="font-size: 0.85rem; color: #64748B; margin-bottom: 16px;">Log in or create store details for official invoices.</p>
+            
+            <div id="login-fields">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="authEmail" placeholder="shopowner@gmail.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="authPassword" placeholder="••••••••">
+                </div>
+                <button class="btn" onclick="handleEmailLogin()">Login to My Store</button>
+                <p style="text-align: center; margin: 12px 0; font-size: 0.85rem; color: #64748B;">— OR Create New Store —</p>
+                <button class="btn btn-secondary" onclick="showSignupForm()">Proceed to New Store Registration</button>
+            </div>
+
+            <div id="signup-fields" class="hidden">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="regEmail" placeholder="shopowner@gmail.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="regPassword" placeholder="••••••••">
+                </div>
+                <div class="form-group">
+                    <label>Store Name (for Invoices)</label>
+                    <input type="text" id="regStoreName" placeholder="e.g. Shri Ganesh Kirana">
+                </div>
+                <div class="form-group">
+                    <label>Proprietor / Owner Name</label>
+                    <input type="text" id="regOwner" placeholder="e.g. Ramesh Kumar">
+                </div>
+                <div class="form-group">
+                    <label>Full Shop Address</label>
+                    <textarea id="regAddress" rows="2" placeholder="Market Road, Belagavi, Karnataka"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="regPhone" placeholder="9876543210">
+                </div>
+                <div class="form-group">
+                    <label>GSTIN (Leave blank if not applicable)</label>
+                    <input type="text" id="regGstin" placeholder="29AAAAA0000A1Z5">
+                </div>
+                <button class="btn btn-success" onclick="handleEmailSignup()">Complete Signup & Launch</button>
+                <button class="btn btn-secondary" onclick="showLoginForm()" style="margin-top: 6px;">Back to Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Header -->
+    <header>
+        <h1 id="app-title">Kirana Smart Khata</h1>
+        <div id="store-info-badge" onclick="logoutUser()">🚪 Logout / Switch Account</div>
+    </header>
+
+    <div class="container">
+        <!-- VIEW 1: BILLING & INVOICE GENERATOR -->
+        <div id="view-billing" class="view active">
+            <!-- Daily Sales Report Card -->
+            <div class="card report-card">
+                <h2>📊 Today's Sales Summary</h2>
+                <div class="report-grid">
+                    <div class="report-box">
+                        <span>Cash</span>
+                        <strong id="repCash">₹0</strong>
+                    </div>
+                    <div class="report-box">
+                        <span>UPI</span>
+                        <strong id="repUpi">₹0</strong>
+                    </div>
+                    <div class="report-box">
+                        <span>Credit (Khata)</span>
+                        <strong id="repCredit" style="color:var(--danger);">₹0</strong>
+                    </div>
+                </div>
+                <button class="btn btn-pdf" onclick="downloadPDFReport('view-billing', 'Daily_Sales_Report.pdf')">📥 Download Sales Report PDF</button>
+            </div>
+
+            <!-- Morning Milk Quick-Add Card -->
+            <div class="card milk-card">
+                <h2>🥛 Morning Milk Quick-Sale</h2>
+                <div class="form-group">
+                    <label>Customer Name</label>
+                    <input type="text" id="milkCustomer" placeholder="Household Name">
+                </div>
+                <div class="form-group">
+                    <label>Milk Variant / Packets</label>
+                    <input type="text" id="milkDetails" placeholder="e.g. 250ml Packet x 2">
+                </div>
+                <div class="form-group">
+                    <label>Amount (₹)</label>
+                    <input type="number" id="milkAmount" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Payment Mode</label>
+                    <select id="milkMode">
+                        <option value="Credit">Add to Monthly Khata (Debtor)</option>
+                        <option value="Cash">Paid Cash</option>
+                        <option value="UPI">Paid UPI</option>
+                    </select>
+                </div>
+                <button class="btn btn-milk" onclick="saveMilkTransaction()">Record Morning Milk Sale</button>
+            </div>
+
+            <!-- Standard Counter Bill & Invoice Generator -->
+            <div class="card invoice-card" id="invoice-bill-section">
+                <h2>🧾 Counter Bill & Invoice Generator</h2>
+                <button class="btn btn-scanner" onclick="startScanner()">📷 Open Barcode Scanner</button>
+                <div id="reader" class="hidden"></div>
+                <button id="closeScannerBtn" class="btn btn-danger hidden" onclick="stopScanner()">Close Camera</button>
+
+                <!-- Store Header Stamp for Invoice -->
+                <div id="invoice-store-stamp" style="background:#F8FAFC; border:1px dashed #CBD5E1; padding:10px; border-radius:6px; margin:12px 0; text-align:center;">
+                    <strong id="invHeaderName" style="font-size:1.05rem; color:var(--primary);">Store Name</strong><br>
+                    <span id="invHeaderAddr" style="font-size:0.8rem; color:#64748B;">Address</span><br>
+                    <span id="invHeaderContact" style="font-size:0.8rem; color:#64748B;">Phone | GSTIN</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Customer Name</label>
+                    <input type="text" id="billCustomer" placeholder="Customer Name">
+                </div>
+                <div class="form-group">
+                    <label>Item Code (Type Manually OR Scan Barcode)</label>
+                    <input type="text" id="billItemCode" placeholder="Enter code or scan..." oninput="lookupItemByCode()">
+                </div>
+                <div class="form-group">
+                    <label>Selected Item & Variant</label>
+                    <input type="text" id="billItemName" readonly style="background:#F1F5F9;" placeholder="Item name & unit auto-fills">
+                </div>
+                <div class="form-group">
+                    <label>Quantity / Packets Count</label>
+                    <input type="number" id="billQty" value="1" min="1" oninput="calculateBillTotal()">
+                </div>
+                
+                <!-- Tax breakdown preview box -->
+                <div id="tax-breakdown-box" style="background:#F1F5F9; padding:10px; border-radius:8px; margin-bottom:12px; font-size:0.85rem;" class="hidden">
+                    <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span> <strong id="billSubtotal">₹0.00</strong></div>
+                    <div style="display:flex; justify-content:space-between;" id="cgstRow"><span>CGST (2.5%):</span> <strong id="billCgst">₹0.00</strong></div>
+                    <div style="display:flex; justify-content:space-between;" id="sgstRow"><span>SGST (2.5%):</span> <strong id="billSgst">₹0.00</strong></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Final Grand Total Amount (₹)</label>
+                    <input type="number" id="billAmount" readonly style="background:#F1F5F9; font-weight:bold; color:var(--success); font-size:1.1rem;" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Payment Mode</label>
+                    <select id="billMode">
+                        <option value="Credit">Khata Credit (Debtor)</option>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                    </select>
+                </div>
+                <button class="btn btn-success" onclick="saveTransaction()">Save Bill & Sync Cloud</button>
+                <button class="btn btn-pdf" onclick="downloadPDFReport('invoice-bill-section', 'Official_Invoice.pdf')">📥 Download Official Bill Invoice PDF</button>
+            </div>
+        </div>
+
+        <!-- VIEW 2: KHATA (DEBTORS & CREDITORS) -->
+        <div id="view-khata" class="view">
+            <div class="card debtor-card">
+                <h2>👥 Debtors (Customers Owning Money)</h2>
+                <div class="form-group">
+                    <label>Customer Name</label>
+                    <input type="text" id="debtorNameInput" placeholder="Customer Name">
+                </div>
+                <div class="form-group">
+                    <label>Mobile Number (with Country Code e.g. 91XXXXXXXXXX)</label>
+                    <input type="text" id="debtorPhoneInput" placeholder="919876543210">
+                </div>
+                <div class="form-group">
+                    <label>Initial Due Amount (₹)</label>
+                    <input type="number" id="debtorDueInput" placeholder="0.00">
+                </div>
+                <button class="btn btn-success" onclick="addNewDebtor()">Add New Debtor</button>
+
+                <div class="form-group" style="margin-top: 16px;">
+                    <input type="text" id="searchDebtor" placeholder="Search debtor..." oninput="renderKhata()">
+                </div>
+                <div id="debtors-list"></div>
+                <button class="btn btn-pdf" onclick="downloadPDFReport('view-khata', 'Debtors_Ledger.pdf')">📥 Download Debtors Report PDF</button>
+            </div>
+
+            <div class="card creditor-card">
+                <h2>🏭 Creditors (Suppliers We Owe Money To)</h2>
+                <div class="form-group">
+                    <input type="text" id="supName" placeholder="Supplier Name (e.g. Amul Milk Agency)">
+                </div>
+                <div class="form-group">
+                    <input type="number" id="supDue" placeholder="Amount Owed to Supplier (₹)">
+                </div>
+                <button class="btn btn-secondary" onclick="saveCreditor()">Add / Update Creditor</button>
+                <div id="creditors-list" style="margin-top: 12px;"></div>
+                <button class="btn btn-pdf" onclick="downloadPDFReport('view-khata', 'Creditors_Ledger.pdf')">📥 Download Creditors Report PDF</button>
+            </div>
+        </div>
+
+        <!-- VIEW 3: STOCK & INVENTORY -->
+        <div id="view-inventory" class="view">
+            <div class="card">
+                <h2>📦 Stock Management</h2>
+                <div class="form-group">
+                    <label>Item Code / Barcode Number</label>
+                    <input type="text" id="prodCode" placeholder="e.g. 101 or barcode">
+                </div>
+                <div class="form-group">
+                    <label>Item Name & Size / Unit</label>
+                    <input type="text" id="prodName" placeholder="e.g. Milk 250ml Packet or Sugar 1kg">
+                </div>
+                <div class="form-group">
+                    <label>Price for this Unit/Variant (₹)</label>
+                    <input type="number" id="prodPrice" placeholder="0.00">
+                </div>
+                <button class="btn" onclick="saveProduct()">Save Product Variant to Stock</button>
+            </div>
+            <div class="card" id="stock-report-section">
+                <h2>Active Stock Inventory</h2>
+                <div id="product-list"></div>
+                <button class="btn btn-pdf" onclick="downloadPDFReport('stock-report-section', 'Stock_Inventory.pdf')">📥 Download Stock PDF</button>
+            </div>
+        </div>
+
+        <!-- VIEW 4: PROFIT & EXPENSES -->
+        <div id="view-profit" class="view">
+            <div class="card profit-card">
+                <h2>💰 Net Profit & Loss Statement</h2>
+                <div class="report-grid">
+                    <div class="report-box">
+                        <span>Total Revenue</span>
+                        <strong id="profRevenue">₹0</strong>
+                    </div>
+                    <div class="report-box">
+                        <span>Total Expenses</span>
+                        <strong id="profExpenses" style="color:var(--danger);">₹0</strong>
+                    </div>
+                    <div class="report-box">
+                        <span>Net Profit</span>
+                        <strong id="profNet" style="color:var(--profit);">₹0</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📉 Record Shop Expense (Kharcha)</h2>
+                <div class="form-group">
+                    <label>Expense Reason</label>
+                    <input type="text" id="expReason" placeholder="e.g. Electricity Bill, Tea, Transport">
+                </div>
+                <div class="form-group">
+                    <label>Amount (₹)</label>
+                    <input type="number" id="expAmount" placeholder="0.00">
+                </div>
+                <button class="btn btn-danger" onclick="saveExpense()">Save Shop Expense</button>
+            </div>
+
+            <div class="card" id="expense-report-section">
+                <h2>Recorded Expenses List</h2>
+                <div id="expense-list"></div>
+                <button class="btn btn-pdf" onclick="downloadPDFReport('view-profit', 'Profit_And_Loss_Statement.pdf')">📥 Download P&L Report PDF</button>
+            </div>
+        </div>
+
+        <!-- VIEW 5: HISTORY -->
+        <div id="view-ledger" class="view">
+            <div class="card">
+                <h2>Recent Cloud Transactions</h2>
+                <div id="transaction-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation Bar -->
+    <div class="nav-bar">
+        <div class="nav-item active" onclick="switchView('billing', this)">🛒 Billing</div>
+        <div class="nav-item" onclick="switchView('khata', this)">📖 Khata</div>
+        <div class="nav-item" onclick="switchView('inventory', this)">📦 Stock</div>
+        <div class="nav-item" onclick="switchView('profit', this)">💰 P & L</div>
+        <div class="nav-item" onclick="switchView('ledger', this)">📜 History</div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://xuwhubqkezkcdxjfkvbq.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_FUkrP-kUpHSF7NYdOmUgLA_2W7eVNUQ";
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentStoreId = null;
+        let currentStoreData = null;
+
+        window.addEventListener("DOMContentLoaded", async () => {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                await fetchStoreAndLoad(session.user.id);
+            } else {
+                document.getElementById("login-modal").classList.remove("hidden");
+            }
+        });
+
+        function showSignupForm() {
+            document.getElementById("login-fields").classList.add("hidden");
+            document.getElementById("signup-fields").classList.remove("hidden");
+        }
+
+        function showLoginForm() {
+            document.getElementById("signup-fields").classList.add("hidden");
+            document.getElementById("login-fields").classList.remove("hidden");
+        }
+
+        async function handleEmailSignup() {
+            const email = document.getElementById("regEmail").value.trim();
+            const password = document.getElementById("regPassword").value.trim();
+            const storeName = document.getElementById("regStoreName").value.trim();
+            const owner = document.getElementById("regOwner").value.trim();
+            const address = document.getElementById("regAddress").value.trim();
+            const phone = document.getElementById("regPhone").value.trim();
+            const gstin = document.getElementById("regGstin").value.trim();
+
+            if (!email || !password || !storeName || !owner || !address || !phone) {
+                return alert("Please fill in all mandatory store invoice details.");
+            }
+
+            const { data: authData, error: authError } = await supabaseClient.auth.signUp({ email, password });
+            if (authError) return alert(authError.message);
+
+            const { error: storeError } = await supabaseClient.from("stores").insert([{ 
+                name: storeName, 
+                user_id: authData.user.id,
+                owner_name: owner,
+                address: address,
+                phone: phone,
+                gstin: gstin
+            }]);
+
+            if (storeError) {
+                alert("Store created in auth, but error saving profile details: " + storeError.message);
+            } else {
+                alert("Store and invoice profile created successfully!");
+            }
+            location.reload();
+        }
+
+        async function handleEmailLogin() {
+            const email = document.getElementById("authEmail").value.trim();
+            const password = document.getElementById("authPassword").value.trim();
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) return alert("Invalid login credentials.");
+            await fetchStoreAndLoad(data.user.id);
+        }
+
+        async function fetchStoreAndLoad(userId) {
+            const { data: store } = await supabaseClient.from("stores").select("*").eq("user_id", userId).single();
+            if (store) {
+                currentStoreId = store.id;
+                currentStoreData = store;
+                document.getElementById("app-title").innerText = store.name;
+                
+                // Update Invoice Stamp Header
+                document.getElementById("invHeaderName").innerText = store.name + (store.owner_name ? ` (Prop. ${store.owner_name})` : '');
+                document.getElementById("invHeaderAddr").innerText = store.address || '';
+                let contactInfo = `Ph: ${store.phone || ''}`;
+                if (store.gstin) contactInfo += ` | GSTIN: ${store.gstin}`;
+                document.getElementById("invHeaderContact").innerText = contactInfo;
+
+                document.getElementById("login-modal").classList.add("hidden");
+                loadStoreData();
+            }
+        }
+
+        async function logoutUser() {
+            await supabaseClient.auth.signOut();
+            location.reload();
+        }
+
+        function switchView(viewId, element) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('view-' + viewId).classList.add('active');
+            element.classList.add('active');
+            stopScanner();
+        }
+
+        let html5QrCode = null;
+
+        function startScanner() {
+            document.getElementById("reader").classList.remove("hidden");
+            document.getElementById("closeScannerBtn").classList.remove("hidden");
+
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 150 } },
+                (decodedText) => {
+                    document.getElementById("billItemCode").value = decodedText;
+                    lookupItemByCode();
+                    stopScanner();
+                },
+                (errorMessage) => {}
+            ).catch(err => {
+                alert("Unable to access camera. Please check camera permissions.");
+            });
+        }
+
+        function stopScanner() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById("reader").classList.add("hidden");
+                    document.getElementById("closeScannerBtn").classList.add("hidden");
+                }).catch(() => {
+                    document.getElementById("reader").classList.add("hidden");
+                    document.getElementById("closeScannerBtn").classList.add("hidden");
+                });
+            } else {
+                document.getElementById("reader").classList.add("hidden");
+                document.getElementById("closeScannerBtn").classList.add("hidden");
+            }
+        }
+
+        let cloudProducts = [], cloudCustomers = [], cloudTransactions = [], cloudCreditors = [], cloudExpenses = [];
+        let activeItemUnitPrice = 0;
+
+        async function loadStoreData() {
+            if (!currentStoreId) return;
+
+            const prods = await supabaseClient.from("products").select("*").eq("store_id", currentStoreId);
+            const custs = await supabaseClient.from("customers").select("*").eq("store_id", currentStoreId);
+            const txns = await supabaseClient.from("transactions").select("*").eq("store_id", currentStoreId).order("id", { ascending: false });
+            
+            let creds = { data: [] };
+            try { creds = await supabaseClient.from("creditors").select("*").eq("store_id", currentStoreId); } catch(e) {}
+
+            let exps = { data: [] };
+            try { exps = await supabaseClient.from("expenses").select("*").eq("store_id", currentStoreId); } catch(e) {}
+
+            cloudProducts = prods.data || [];
+            cloudCustomers = custs.data || [];
+            cloudTransactions = txns.data || [];
+            cloudCreditors = creds.data || [];
+            cloudExpenses = exps.data || [];
+
+            renderInventory();
+            renderKhata();
+            renderCreditors();
+            renderExpenses();
+            renderTransactions();
+            calculateDailyReport();
+            calculateProfitAndLoss();
+        }
+
+        function calculateDailyReport() {
+            let cashTotal = 0, upiTotal = 0, creditTotal = 0;
+            const todayStr = new Date().toLocaleDateString();
+
+            cloudTransactions.forEach(t => {
+                if (t.timestamp && t.timestamp.includes(todayStr.slice(0, 5))) {
+                    if (t.payment_mode === "Cash") cashTotal += Number(t.amount);
+                    else if (t.payment_mode === "UPI") upiTotal += Number(t.amount);
+                    else if (t.payment_mode === "Credit") creditTotal += Number(t.amount);
+                }
+            });
+
+            document.getElementById("repCash").innerText = "₹" + cashTotal;
+            document.getElementById("repUpi").innerText = "₹" + upiTotal;
+            document.getElementById("repCredit").innerText = "₹" + creditTotal;
+        }
+
+        function calculateProfitAndLoss() {
+            let totalRevenue = 0;
+            cloudTransactions.forEach(t => {
+                if (t.payment_mode === "Cash" || t.payment_mode === "UPI") {
+                    totalRevenue += Number(t.amount);
+                }
+            });
+
+            let totalExpenses = 0;
+            cloudExpenses.forEach(e => {
+                totalExpenses += Number(e.amount);
+            });
+
+            let netProfit = totalRevenue - totalExpenses;
+
+            document.getElementById("profRevenue").innerText = "₹" + totalRevenue;
+            document.getElementById("profExpenses").innerText = "₹" + totalExpenses;
+            document.getElementById("profNet").innerText = "₹" + netProfit;
+        }
+
+        function downloadPDFReport(elementId, filename) {
+            const element = document.getElementById(elementId);
+            const opt = {
+                margin:       10,
+                filename:     filename,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().from(element).set(opt).save();
+        }
+
+        function lookupItemByCode() {
+            const codeInput = document.getElementById("billItemCode").value.trim();
+            const found = cloudProducts.find(p => String(p.code) === codeInput);
+            if (found) {
+                document.getElementById("billItemName").value = found.name;
+                activeItemUnitPrice = Number(found.price);
+                calculateBillTotal();
+            } else {
+                document.getElementById("billItemName").value = "Item not found";
+                activeItemUnitPrice = 0;
+                document.getElementById("billAmount").value = "";
+                document.getElementById("tax-breakdown-box").classList.add("hidden");
+            }
+        }
+
+        function calculateBillTotal() {
+            const qty = parseFloat(document.getElementById("billQty").value) || 1;
+            const subtotal = activeItemUnitPrice * qty;
+
+            if (currentStoreData && currentStoreData.gstin && currentStoreData.gstin.trim() !== "") {
+                // GST Applicable (assume 5% total tax split into 2.5% CGST + 2.5% SGST)
+                const cgst = subtotal * 0.025;
+                const sgst = subtotal * 0.025;
+                const grandTotal = subtotal + cgst + sgst;
+
+                document.getElementById("billSubtotal").innerText = "₹" + subtotal.toFixed(2);
+                document.getElementById("billCgst").innerText = "₹" + cgst.toFixed(2);
+                document.getElementById("billSgst").innerText = "₹" + sgst.toFixed(2);
+                document.getElementById("tax-breakdown-box").classList.remove("hidden");
+                document.getElementById("billAmount").value = grandTotal > 0 ? grandTotal.toFixed(2) : "";
+            } else {
+                // Normal Bill (No GST)
+                document.getElementById("tax-breakdown-box").classList.add("hidden");
+                document.getElementById("billAmount").value = subtotal > 0 ? subtotal.toFixed(2) : "";
+            }
+        }
+
+        async function saveTransaction() {
+            if (!currentStoreId) return;
+            const customerName = document.getElementById("billCustomer").value.trim() || "Cash Customer";
+            const itemName = document.getElementById("billItemName").value;
+            const qty = document.getElementById("billQty").value;
+            const details = `${itemName} (Qty: ${qty})`;
+            const amount = parseFloat(document.getElementById("billAmount").value) || 0;
+            const mode = document.getElementById("billMode").value;
+            if (amount <= 0) return alert("Enter a valid item code and quantity.");
+
+            await supabaseClient.from("transactions").insert([{
+                store_id: currentStoreId, customer_name: customerName, type: mode === "Credit" ? "CREDIT" : "PAYMENT", details: details, amount, payment_mode: mode, timestamp: new Date().toLocaleString()
+            }]);
+
+            if (mode === "Credit") {
+                let existing = cloudCustomers.find(c => c.name.toLowerCase() === customerName.toLowerCase());
+                if (existing) {
+                    await supabaseClient.from("customers").update({ due: Number(existing.due) + amount }).eq("id", existing.id);
+                } else {
+                    await supabaseClient.from("customers").insert([{ store_id: currentStoreId, name: customerName, phone: "", credit: amount, paid: 0, due: amount }]);
+                }
+            }
+            alert("Bill & Official Invoice saved & synced!");
+            document.getElementById("billCustomer").value = "";
+            document.getElementById("billItemCode").value = "";
+            document.getElementById("billItemName").value = "";
+            document.getElementById("billQty").value = "1";
+            document.getElementById("billAmount").value = "";
+            document.getElementById("tax-breakdown-box").classList.add("hidden");
+            loadStoreData();
+        }
+
+        async function saveMilkTransaction() {
+            if (!currentStoreId) return;
+            const customerName = document.getElementById("milkCustomer").value.trim() || "Morning Milk Customer";
+            const details = "🥛 " + (document.getElementById("milkDetails").value.trim() || "Daily Milk Packet");
+            const amount = parseFloat(document.getElementById("milkAmount").value) || 0;
+            const mode = document.getElementById("milkMode").value;
+            if (amount <= 0) return alert("Enter valid milk amount.");
+
+            await supabaseClient.from("transactions").insert([{
+                store_id: currentStoreId, customer_name: customerName, type: mode === "Credit" ? "CREDIT" : "PAYMENT", details: details, amount, payment_mode: mode, timestamp: new Date().toLocaleString()
+            }]);
+
+            if (mode === "Credit") {
+                let existing = cloudCustomers.find(c => c.name.toLowerCase() === customerName.toLowerCase());
+                if (existing) {
+                    await supabaseClient.from("customers").update({ due: Number(existing.due) + amount }).eq("id", existing.id);
+                } else {
+                    await supabaseClient.from("customers").insert([{ store_id: currentStoreId, name: customerName, phone: "", credit: amount, paid: 0, due: amount }]);
+                }
+            }
+            alert("Morning milk recorded!");
+            document.getElementById("milkCustomer").value = "";
+            document.getElementById("milkDetails").value = "";
+            document.getElementById("milkAmount").value = "";
+            loadStoreData();
+        }
+
+        async function addNewDebtor() {
+            if (!currentStoreId) return;
+            const name = document.getElementById("debtorNameInput").value.trim();
+            const phone = document.getElementById("debtorPhoneInput").value.trim();
+            const due = parseFloat(document.getElementById("debtorDueInput").value) || 0;
+            if (!name) return alert("Enter customer name.");
+
+            await supabaseClient.from("customers").insert([{ store_id: currentStoreId, name, phone, credit: due, paid: 0, due }]);
+            alert("New debtor added successfully!");
+            document.getElementById("debtorNameInput").value = "";
+            document.getElementById("debtorPhoneInput").value = "";
+            document.getElementById("debtorDueInput").value = "";
+            loadStoreData();
+        }
+
+        async function saveProduct() {
+            if (!currentStoreId) return;
+            const code = document.getElementById("prodCode").value.trim();
+            const name = document.getElementById("prodName").value.trim();
+            const price = parseFloat(document.getElementById("prodPrice").value) || 0;
+            if (!code || !name) return alert("Enter item code/barcode and variant name.");
+
+            await supabaseClient.from("products").insert([{ store_id: currentStoreId, code, name, price }]);
+            alert("Product variant saved!");
+            document.getElementById("prodCode").value = "";
+            document.getElementById("prodName").value = "";
+            document.getElementById("prodPrice").value = "";
+            loadStoreData();
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm("Delete this product from stock?")) return;
+            await supabaseClient.from("products").delete().eq("id", id);
+            loadStoreData();
+        }
+
+        async function editProduct(id, currentCode, currentName, currentPrice) {
+            const newCode = prompt("Edit Item Code:", currentCode);
+            const newName = prompt("Edit Item Name:", currentName);
+            const newPrice = prompt("Edit Price (₹):", currentPrice);
+            if (!newCode || !newName || !newPrice) return;
+
+            await supabaseClient.from("products").update({ code: newCode, name: newName, price: parseFloat(newPrice) }).eq("id", id);
+            loadStoreData();
+        }
+
+        async function saveCreditor() {
+            if (!currentStoreId) return;
+            const name = document.getElementById("supName").value.trim();
+            const due = parseFloat(document.getElementById("supDue").value) || 0;
+            if (!name) return alert("Enter supplier name.");
+
+            await supabaseClient.from("creditors").insert([{ store_id: currentStoreId, name, due }]);
+            alert("Creditor supplier saved!");
+            document.getElementById("supName").value = "";
+            document.getElementById("supDue").value = "";
+            loadStoreData();
+        }
+
+        async function deleteCreditor(id) {
+            if (!confirm("Delete this creditor?")) return;
+            await supabaseClient.from("creditors").delete().eq("id", id);
+            loadStoreData();
+        }
+
+        async function deleteCustomer(id) {
+            if (!confirm("Delete this debtor khata record?")) return;
+            await supabaseClient.from("customers").delete().eq("id", id);
+            loadStoreData();
+        }
+
+        async function editCustomerDue(id, currentName, currentDue) {
+            const paymentPaid = prompt(`Customer ${currentName} currently owes ₹${currentDue}.\nEnter payment amount received to settle balance (or cancel):`, "0");
+            if (paymentPaid === null) return;
+            const paidAmt = parseFloat(paymentPaid) || 0;
+            if (paidAmt <= 0) return;
+
+            const newDue = Math.max(0, currentDue - paidAmt);
+            await supabaseClient.from("customers").update({ due: newDue }).eq("id", id);
+
+            await supabaseClient.from("transactions").insert([{
+                store_id: currentStoreId, customer_name: currentName, type: "PAYMENT", details: `Khata Settlement Payment`, amount: paidAmt, payment_mode: "Cash", timestamp: new Date().toLocaleString()
+            }]);
+
+            alert(`Settlement recorded! New due for ${currentName} is ₹${newDue}`);
+            loadStoreData();
+        }
+
+        async function saveExpense() {
+            if (!currentStoreId) return;
+            const reason = document.getElementById("expReason").value.trim();
+            const amount = parseFloat(document.getElementById("expAmount").value) || 0;
+            if (!reason || amount <= 0) return alert("Enter valid expense reason and amount.");
+
+            await supabaseClient.from("expenses").insert([{ store_id: currentStoreId, reason, amount, timestamp: new Date().toLocaleDateString() }]);
+            alert("Expense recorded!");
+            document.getElementById("expReason").value = "";
+            document.getElementById("expAmount").value = "";
+            loadStoreData();
+        }
+
+        async function deleteExpense(id) {
+            if (!confirm("Delete this expense record?")) return;
+            await supabaseClient.from("expenses").delete().eq("id", id);
+            loadStoreData();
+        }
+
+        function renderInventory() {
+            const list = document.getElementById("product-list");
+            list.innerHTML = cloudProducts.length ? "" : "<p style='color:#64748B;'>No stock items added.</p>";
+            cloudProducts.forEach(p => {
+                list.innerHTML += `
+                    <div class="list-item">
+                        <div><strong>[Code: ${p.code}] ${p.name}</strong><br>₹${p.price}</div>
+                        <div class="action-btns">
+                            <button class="btn-warning" onclick="editProduct(${p.id}, '${p.code}', '${p.name}', ${p.price})">Edit</button>
+                            <button class="btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function renderKhata() {
+            const search = document.getElementById("searchDebtor").value.toLowerCase();
+            const list = document.getElementById("debtors-list");
+            const filtered = cloudCustomers.filter(c => c.name.toLowerCase().includes(search));
+            list.innerHTML = filtered.length ? "" : "<p style='color:#64748B;'>No debtor records found.</p>";
+            
+            filtered.forEach(c => {
+                const phoneNum = c.phone || "";
+                const waText = encodeURIComponent(`Hello ${c.name}, your total pending balance at Kirana Store is ₹${c.due}. Please clear it at your earliest convenience. Thank you!`);
+                const waLink = phoneNum ? `https://wa.me/${phoneNum}?text=${waText}` : `https://wa.me/?text=${waText}`;
+
+                list.innerHTML += `
+                    <div class="list-item">
+                        <div>
+                            <strong>${c.name}</strong> ${phoneNum ? '('+phoneNum+')' : ''}<br>
+                            <small style="color:var(--danger); font-weight:bold;">Due: ₹${c.due}</small><br>
+                            <a class="btn-whatsapp" href="${waLink}" target="_blank">💬 WhatsApp Reminder</a>
+                        </div>
+                        <div class="action-btns">
+                            <button class="btn-success" onclick="editCustomerDue(${c.id}, '${c.name}', ${c.due})">Settle</button>
+                            <button class="btn-danger" onclick="deleteCustomer(${c.id})">Delete</button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function renderCreditors() {
+            const list = document.getElementById("creditors-list");
+            list.innerHTML = cloudCreditors.length ? "" : "<p style='color:#64748B;'>No creditors added.</p>";
+            cloudCreditors.forEach(cr => {
+                list.innerHTML += `
+                    <div class="list-item">
+                        <div><strong>${cr.name}</strong><br><small style="color:var(--danger);">Owed: ₹${cr.due}</small></div>
+                        <div>
+                            <button class="btn-danger" onclick="deleteCreditor(${cr.id})">Delete</button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function renderExpenses() {
+            const list = document.getElementById("expense-list");
+            list.innerHTML = cloudExpenses.length ? "" : "<p style='color:#64748B;'>No expenses recorded.</p>";
+            cloudExpenses.forEach(e => {
+                list.innerHTML += `
+                    <div class="list-item">
+                        <div><strong>${e.reason}</strong><br><small style="color:#64748B;">${e.timestamp}</small></div>
+                        <div style="text-align:right;"><strong>₹${e.amount}</strong><br><button class="btn-danger" onclick="deleteExpense(${e.id})">Delete</button></div>
+                    </div>`;
+            });
+        }
+
+        function renderTransactions() {
+            const list = document.getElementById("transaction-list");
+            list.innerHTML = cloudTransactions.length ? "" : "<p style='color:#64748B;'>No transactions recorded.</p>";
+            cloudTransactions.forEach(t => {
+                list.innerHTML += `<div class="list-item"><div><strong>${t.customer_name}</strong> - ${t.details}<br><small style="color:#64748B;">${t.timestamp} (${t.payment_mode})</small></div><div style="text-align:right;"><strong>₹${t.amount}</strong><br><span class="tag ${t.type === 'CREDIT' ? 'tag-credit' : 'tag-paid'}">${t.type}</span></div></div>`;
+            });
+        }
+    </script>
+</body>
+</html>
