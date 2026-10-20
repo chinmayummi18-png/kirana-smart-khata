@@ -173,6 +173,7 @@
         .tag { display: inline-block; padding: 2px 8px; font-size: 0.75rem; border-radius: 4px; font-weight: 600; }
         .tag-credit { background: #FEE2E2; color: #991B1B; }
         .tag-paid { background: #DCFCE7; color: #166534; }
+        .tag-alert { background: #FEF3C7; color: #D97706; }
 
         .modal-overlay {
             position: fixed;
@@ -274,7 +275,7 @@
     </header>
 
     <div class="container">
-        <!-- VIEW 1: BILLING & INVOICE GENERATOR -->
+        <!-- VIEW 1: BILLING & CART INVOICE GENERATOR -->
         <div id="view-billing" class="view active">
             <!-- Subscription & Membership Card -->
             <div class="card sub-card">
@@ -341,9 +342,9 @@
                 <button class="btn btn-milk" onclick="saveMilkTransaction()">Record Morning Milk Sale</button>
             </div>
 
-            <!-- Standard Counter Bill & Invoice Generator -->
+            <!-- Cart Multi-Item Counter Bill & Invoice Generator -->
             <div class="card invoice-card" id="invoice-bill-section">
-                <h2>🧾 Counter Bill & Invoice Generator</h2>
+                <h2>🧾 Multi-Item Cart & Invoice Generator</h2>
                 <button class="btn btn-scanner" onclick="startScanner()">📷 Open Barcode Scanner</button>
                 <div id="reader" class="hidden"></div>
                 <button id="closeScannerBtn" class="btn btn-danger hidden" onclick="stopScanner()">Close Camera</button>
@@ -359,16 +360,16 @@
                     <input type="text" id="billCustomer" placeholder="Customer Name">
                 </div>
                 <div class="form-group">
-                    <label>Item Code (Type Manually OR Scan Barcode)</label>
-                    <input type="text" id="billItemCode" placeholder="Enter code or scan..." oninput="lookupItemByCode()">
+                    <label>Scan or Enter Item Code to Add to Cart</label>
+                    <input type="text" id="cartItemCodeInput" placeholder="Scan barcode or type code..." oninput="addItemToCartByCode()">
                 </div>
-                <div class="form-group">
-                    <label>Selected Item & Variant</label>
-                    <input type="text" id="billItemName" readonly style="background:#F1F5F9;" placeholder="Item name & unit auto-fills">
-                </div>
-                <div class="form-group">
-                    <label>Quantity / Packets Count</label>
-                    <input type="number" id="billQty" value="1" min="1" oninput="calculateBillTotal()">
+
+                <!-- Active Cart Items Table View -->
+                <div style="margin: 12px 0; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: #FFF;">
+                    <label style="font-weight: bold; margin-bottom: 6px;">🛒 Cart Items</label>
+                    <div id="cart-items-container">
+                        <p style="color:#64748B; font-size:0.85rem;">Cart is empty. Scan items to add.</p>
+                    </div>
                 </div>
                 
                 <div id="tax-breakdown-box" style="background:#F1F5F9; padding:10px; border-radius:8px; margin-bottom:12px; font-size:0.85rem;" class="hidden">
@@ -389,7 +390,7 @@
                         <option value="UPI">UPI</option>
                     </select>
                 </div>
-                <button class="btn btn-success" onclick="saveTransaction()">Save Bill & Sync Cloud</button>
+                <button class="btn btn-success" onclick="saveCartTransaction()">Save Bill & Sync Cloud</button>
                 <button class="btn btn-pdf" onclick="downloadPDFReport('invoice-bill-section', 'Official_Invoice.pdf')">📥 Download Official Bill Invoice PDF</button>
             </div>
         </div>
@@ -452,7 +453,7 @@
                 <button class="btn" onclick="saveProduct()">Save Product Variant to Stock</button>
             </div>
             <div class="card" id="stock-report-section">
-                <h2>Active Stock Inventory</h2>
+                <h2>Active Stock Inventory & Alerts</h2>
                 <div id="product-list"></div>
                 <button class="btn btn-pdf" onclick="downloadPDFReport('stock-report-section', 'Stock_Inventory.pdf')">📥 Download Stock PDF</button>
             </div>
@@ -534,6 +535,7 @@
         let currentStoreId = null;
         let currentStoreData = null;
         let deferredPrompt = null;
+        let activeCart = []; // Multi-item cart list
 
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
@@ -554,7 +556,6 @@
         }
 
         window.addEventListener("DOMContentLoaded", async () => {
-            // Set default calendar date picker to today
             const todayIso = new Date().toISOString().split('T')[0];
             document.getElementById("calendarDateFilter").value = todayIso;
 
@@ -638,16 +639,15 @@
                 currentStoreId = store.id;
                 currentStoreData = store;
                 
-                // Check 30-Day Free Trial Expiration
                 if (store.subscription_status !== 'active') {
-                    const createdDate = new Date(store.created_at || store.id); // fallback if created_at missing
+                    const createdDate = new Date(store.created_at || store.id);
                     const now = new Date();
                     const diffTime = Math.abs(now - createdDate);
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                     if (diffDays > 30) {
                         document.getElementById("sub-expired-modal").classList.remove("hidden");
-                        return; // Block access until paid
+                        return;
                     } else {
                         const daysLeft = 30 - diffDays;
                         document.getElementById("trial-status-text").innerText = `Free Trial Active: ${daysLeft} days remaining.`;
@@ -692,8 +692,8 @@
                 { facingMode: "environment" },
                 { fps: 10, qrbox: { width: 250, height: 150 } },
                 (decodedText) => {
-                    document.getElementById("billItemCode").value = decodedText;
-                    lookupItemByCode();
+                    document.getElementById("cartItemCodeInput").value = decodedText;
+                    addItemToCartByCode();
                     stopScanner();
                 },
                 (errorMessage) => {}
@@ -718,7 +718,6 @@
         }
 
         let cloudProducts = [], cloudCustomers = [], cloudTransactions = [], cloudCreditors = [], cloudExpenses = [];
-        let activeItemUnitPrice = 0;
 
         async function loadStoreData() {
             if (!currentStoreId) return;
@@ -797,24 +796,59 @@
             html2pdf().from(element).set(opt).save();
         }
 
-        function lookupItemByCode() {
-            const codeInput = document.getElementById("billItemCode").value.trim();
+        // Multi-Item Cart Logic
+        function addItemToCartByCode() {
+            const codeInput = document.getElementById("cartItemCodeInput").value.trim();
+            if (!codeInput) return;
+
             const found = cloudProducts.find(p => String(p.code) === codeInput);
             if (found) {
-                document.getElementById("billItemName").value = found.name;
-                activeItemUnitPrice = Number(found.price);
-                calculateBillTotal();
-            } else {
-                document.getElementById("billItemName").value = "Item not found";
-                activeItemUnitPrice = 0;
-                document.getElementById("billAmount").value = "";
-                document.getElementById("tax-breakdown-box").classList.add("hidden");
+                let existingItem = activeCart.find(item => item.code === found.code);
+                if (existingItem) {
+                    existingItem.qty += 1;
+                } else {
+                    activeCart.push({ code: found.code, name: found.name, price: Number(found.price), qty: 1 });
+                }
+                document.getElementById("cartItemCodeInput").value = "";
+                renderCart();
             }
         }
 
-        function calculateBillTotal() {
-            const qty = parseFloat(document.getElementById("billQty").value) || 1;
-            const subtotal = activeItemUnitPrice * qty;
+        function updateCartItemQty(code, change) {
+            let item = activeCart.find(i => i.code === code);
+            if (item) {
+                item.qty += change;
+                if (item.qty <= 0) {
+                    activeCart = activeCart.filter(i => i.code !== code);
+                }
+                renderCart();
+            }
+        }
+
+        function renderCart() {
+            const container = document.getElementById("cart-items-container");
+            if (activeCart.length === 0) {
+                container.innerHTML = "<p style='color:#64748B; font-size:0.85rem;'>Cart is empty. Scan items to add.</p>";
+                document.getElementById("billAmount").value = "";
+                document.getElementById("tax-breakdown-box").classList.add("hidden");
+                return;
+            }
+
+            container.innerHTML = "";
+            let subtotal = 0;
+
+            activeCart.forEach(item => {
+                let itemTotal = item.price * item.qty;
+                subtotal += itemTotal;
+                container.innerHTML += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #F1F5F9; font-size:0.85rem;">
+                        <div><strong>${item.name}</strong><br>₹${item.price} × ${item.qty} = <strong>₹${itemTotal}</strong></div>
+                        <div style="display:flex; gap:4px;">
+                            <button class="btn-warning" style="padding:2px 6px; font-size:0.75rem;" onclick="updateCartItemQty('${item.code}', 1)">+</button>
+                            <button class="btn-danger" style="padding:2px 6px; font-size:0.75rem;" onclick="updateCartItemQty('${item.code}', -1)">-</button>
+                        </div>
+                    </div>`;
+            });
 
             if (currentStoreData && currentStoreData.gstin && currentStoreData.gstin.trim() !== "") {
                 const cgst = subtotal * 0.025;
@@ -825,25 +859,24 @@
                 document.getElementById("billCgst").innerText = "₹" + cgst.toFixed(2);
                 document.getElementById("billSgst").innerText = "₹" + sgst.toFixed(2);
                 document.getElementById("tax-breakdown-box").classList.remove("hidden");
-                document.getElementById("billAmount").value = grandTotal > 0 ? grandTotal.toFixed(2) : "";
+                document.getElementById("billAmount").value = grandTotal.toFixed(2);
             } else {
                 document.getElementById("tax-breakdown-box").classList.add("hidden");
-                document.getElementById("billAmount").value = subtotal > 0 ? subtotal.toFixed(2) : "";
+                document.getElementById("billAmount").value = subtotal.toFixed(2);
             }
         }
 
-        async function saveTransaction() {
+        async function saveCartTransaction() {
             if (!currentStoreId) return;
+            if (activeCart.length === 0) return alert("Cart is empty.");
+
             const customerName = document.getElementById("billCustomer").value.trim() || "Cash Customer";
-            const itemName = document.getElementById("billItemName").value;
-            const qty = document.getElementById("billQty").value;
-            const details = `${itemName} (Qty: ${qty})`;
+            const detailsSummary = activeCart.map(i => `${i.name} (x${i.qty})`).join(", ");
             const amount = parseFloat(document.getElementById("billAmount").value) || 0;
             const mode = document.getElementById("billMode").value;
-            if (amount <= 0) return alert("Enter a valid item code and quantity.");
 
             const { data, error } = await supabaseClient.from("transactions").insert([{
-                store_id: currentStoreId, customer_name: customerName, type: mode === "Credit" ? "CREDIT" : "PAYMENT", details: details, amount, payment_mode: mode, timestamp: new Date().toLocaleString()
+                store_id: currentStoreId, customer_name: customerName, type: mode === "Credit" ? "CREDIT" : "PAYMENT", details: detailsSummary, amount, payment_mode: mode, timestamp: new Date().toLocaleString()
             }]).select();
 
             if (error) return alert("Error saving bill: " + error.message);
@@ -863,13 +896,10 @@
                     if (cData && cData[0]) cloudCustomers.push(cData[0]);
                 }
             }
-            alert("Bill & Official Invoice saved & synced!");
+            alert("Cart Bill & Official Invoice saved & synced!");
             document.getElementById("billCustomer").value = "";
-            document.getElementById("billItemCode").value = "";
-            document.getElementById("billItemName").value = "";
-            document.getElementById("billQty").value = "1";
-            document.getElementById("billAmount").value = "";
-            document.getElementById("tax-breakdown-box").classList.add("hidden");
+            activeCart = [];
+            renderCart();
             
             renderTransactionsByDate();
             renderKhata();
@@ -1026,6 +1056,38 @@
             calculateDailyReport();
         }
 
+        function downloadCustomerStatement(customerName) {
+            const customerTxns = cloudTransactions.filter(t => t.customer_name.toLowerCase() === customerName.toLowerCase());
+            let htmlContent = `
+                <div style="padding:20px; font-family:sans-serif;">
+                    <h2>Khata Statement: ${customerName}</h2>
+                    <p>Generated by: ${currentStoreData.name}</p>
+                    <hr style="margin:10px 0;">
+            `;
+            if (customerTxns.length === 0) {
+                htmlContent += `<p>No transactions found for this customer.</p>`;
+            } else {
+                htmlContent += `<table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                    <tr style="background:#F1F5F9;"><th style="border:1px solid #CBD5E1; padding:6px;">Date</th><th style="border:1px solid #CBD5E1; padding:6px;">Details</th><th style="border:1px solid #CBD5E1; padding:6px;">Type</th><th style="border:1px solid #CBD5E1; padding:6px;">Amount</th></tr>`;
+                customerTxns.forEach(t => {
+                    htmlContent += `<tr><td style="border:1px solid #CBD5E1; padding:6px;">${t.timestamp}</td><td style="border:1px solid #CBD5E1; padding:6px;">${t.details}</td><td style="border:1px solid #CBD5E1; padding:6px;">${t.type}</td><td style="border:1px solid #CBD5E1; padding:6px;">₹${t.amount}</td></tr>`;
+                });
+                htmlContent += `</table>`;
+            }
+            htmlContent += `</div>`;
+
+            const element = document.createElement('div');
+            element.innerHTML = htmlContent;
+            const opt = {
+                margin: 10,
+                filename: `${customerName}_Khata_Statement.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().from(element).set(opt).save();
+        }
+
         async function saveExpense() {
             if (!currentStoreId) return;
             const reason = document.getElementById("expReason").value.trim();
@@ -1057,7 +1119,10 @@
             cloudProducts.forEach(p => {
                 list.innerHTML += `
                     <div class="list-item">
-                        <div><strong>[Code: ${p.code}] ${p.name}</strong><br>₹${p.price}</div>
+                        <div>
+                            <strong>[Code: ${p.code}] ${p.name}</strong><br>₹${p.price} 
+                            <span class="tag tag-alert" style="margin-left:6px;">In Stock</span>
+                        </div>
                         <div class="action-btns">
                             <button class="btn-warning" onclick="editProduct(${p.id}, '${p.code}', '${p.name}', ${p.price})">Edit</button>
                             <button class="btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
@@ -1083,6 +1148,7 @@
                             <strong>${c.name}</strong> ${phoneNum ? '('+phoneNum+')' : ''}<br>
                             <small style="color:var(--danger); font-weight:bold;">Due: ₹${c.due}</small><br>
                             <a class="btn-whatsapp" href="${waLink}" target="_blank">💬 WhatsApp Reminder</a>
+                            <button class="btn-pdf" style="margin-left:4px; padding:4px 8px;" onclick="downloadCustomerStatement('${c.name}')">📄 Statement PDF</button>
                         </div>
                         <div class="action-btns">
                             <button class="btn-success" onclick="editCustomerDue(${c.id}, '${c.name}', ${c.due})">Settle</button>
@@ -1119,7 +1185,7 @@
         }
 
         function renderTransactionsByDate() {
-            const selectedDateVal = document.getElementById("calendarDateFilter").value; // Format: YYYY-MM-DD
+            const selectedDateVal = document.getElementById("calendarDateFilter").value;
             const list = document.getElementById("transaction-list");
             
             if (!selectedDateVal) {
@@ -1127,14 +1193,12 @@
                 return;
             }
 
-            // Convert YYYY-MM-DD to DD/MM/YYYY or standard comparison matching timestamp string
             const parts = selectedDateVal.split('-');
-            const formattedDateStr = `${parts[2]}/${parts[1]}`; // e.g., "20/10"
+            const formattedDateStr = `${parts[2]}/${parts[1]}`;
 
             let dayTotal = 0;
             const filtered = cloudTransactions.filter(t => {
                 if (!t.timestamp) return false;
-                // Check if timestamp contains the selected date string
                 return t.timestamp.includes(formattedDateStr) || t.timestamp.includes(selectedDateVal);
             });
 
