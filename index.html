@@ -365,7 +365,7 @@
                 </div>
 
                 <div style="margin: 12px 0; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: #FFF;">
-                    <label style="font-weight: bold; margin-bottom: 6px;">🛒 Cart Items</label>
+                    <label style="font-weight: bold; margin-bottom: 6px;">🛒 Cart Items & Quantities</label>
                     <div id="cart-items-container">
                         <p style="color:#64748B; font-size:0.85rem;">Cart is empty. Scan items to add.</p>
                     </div>
@@ -844,7 +844,7 @@
                 subtotal += itemTotal;
                 container.innerHTML += `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #F1F5F9; font-size:0.85rem;">
-                        <div><strong>${item.name}</strong><br>₹${item.price} × ${item.qty} = <strong>₹${itemTotal}</strong></div>
+                        <div><strong>${item.name}</strong><br>₹${item.price} × <span style="color:var(--accent); font-weight:bold;">Qty: ${item.qty}</span> = <strong>₹${itemTotal}</strong></div>
                         <div style="display:flex; gap:4px;">
                             <button class="btn-warning" style="padding:2px 6px; font-size:0.75rem;" onclick="updateCartItemQty('${item.code}', 1)">+</button>
                             <button class="btn-danger" style="padding:2px 6px; font-size:0.75rem;" onclick="updateCartItemQty('${item.code}', -1)">-</button>
@@ -873,11 +873,10 @@
             if (activeCart.length === 0) return alert("Cart is empty.");
 
             const customerName = document.getElementById("billCustomer").value.trim() || "Cash Customer";
-            const detailsSummary = activeCart.map(i => `${i.name} (x${i.qty})`).join(", ");
+            const detailsSummary = activeCart.map(i => `${i.name} (Qty: ${i.qty})`).join(", ");
             const amount = parseFloat(document.getElementById("billAmount").value) || 0;
             const mode = document.getElementById("billMode").value;
 
-            // Deduct stock quantities from database & local array
             for (let item of activeCart) {
                 let currentProd = cloudProducts.find(p => p.id === item.id);
                 if (currentProd) {
@@ -908,7 +907,7 @@
                     if (cData && cData[0]) cloudCustomers.push(cData[0]);
                 }
             }
-            alert("Cart Bill & Official Invoice saved, stock updated & synced!");
+            alert("Cart Bill with Quantities & Official Invoice saved, stock deducted & synced!");
             document.getElementById("billCustomer").value = "";
             activeCart = [];
             renderCart();
