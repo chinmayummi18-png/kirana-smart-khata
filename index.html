@@ -916,7 +916,6 @@
                 }
             }
 
-            // Generate WhatsApp Bill message link
             let billText = `*${currentStoreData.name}* - Bill Invoice\n` +
                            `Customer: ${customerName}\n` +
                            `Date: ${new Date().toLocaleString()}\n` +
@@ -1074,6 +1073,15 @@
             await supabaseClient.from("customers").delete().eq("id", id);
             cloudCustomers = cloudCustomers.filter(c => c.id !== id);
             renderKhata();
+        }
+
+        async function deleteTransaction(id) {
+            if (!confirm("Delete this transaction entry from history?")) return;
+            await supabaseClient.from("transactions").delete().eq("id", id);
+            cloudTransactions = cloudTransactions.filter(t => t.id !== id);
+            renderTransactionsByDate();
+            calculateDailyReport();
+            calculateProfitAndLoss();
         }
 
         async function editCustomerDue(id, currentName, currentDue) {
@@ -1263,6 +1271,7 @@
                         <div style="text-align:right;">
                             <strong>₹${t.amount}</strong><br>
                             <span class="tag ${t.type === 'CREDIT' ? 'tag-credit' : 'tag-paid'}">${t.type}</span>
+                            <button class="btn-danger" style="margin-top:4px;" onclick="deleteTransaction(${t.id})">Delete</button>
                         </div>
                     </div>`;
             });
