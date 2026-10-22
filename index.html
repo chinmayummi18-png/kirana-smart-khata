@@ -241,7 +241,7 @@
         </div>
     </div>
 
-    <!-- Subscription Blockout Modal (Appears if Trial Expired) -->
+    <!-- Subscription Blockout Modal -->
     <div id="sub-expired-modal" class="modal-overlay hidden">
         <div class="card sub-card" style="width: 100%; max-width: 400px; margin: auto; border: 2px solid var(--danger);">
             <h2 style="color: var(--danger);">⚠️ Free Trial Expired</h2>
@@ -364,7 +364,6 @@
                     <input type="text" id="cartItemCodeInput" placeholder="Scan barcode or type code..." oninput="addItemToCartByCode()">
                 </div>
 
-                <!-- Active Cart Items Table View -->
                 <div style="margin: 12px 0; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: #FFF;">
                     <label style="font-weight: bold; margin-bottom: 6px;">🛒 Cart Items</label>
                     <div id="cart-items-container">
@@ -437,7 +436,7 @@
         <!-- VIEW 3: STOCK & INVENTORY -->
         <div id="view-inventory" class="view">
             <div class="card">
-                <h2>📦 Stock Management</h2>
+                <h2>📦 Stock Management & Quantity Tracking</h2>
                 <div class="form-group">
                     <label>Item Code / Barcode Number</label>
                     <input type="text" id="prodCode" placeholder="e.g. 101 or barcode">
@@ -447,13 +446,17 @@
                     <input type="text" id="prodName" placeholder="e.g. Milk 250ml Packet or Sugar 1kg">
                 </div>
                 <div class="form-group">
-                    <label>Price for this Unit/Variant (₹)</label>
+                    <label>Stock Quantity (Units Purchased / Available)</label>
+                    <input type="number" id="prodQty" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>Price per Unit (₹)</label>
                     <input type="number" id="prodPrice" placeholder="0.00">
                 </div>
-                <button class="btn" onclick="saveProduct()">Save Product Variant to Stock</button>
+                <button class="btn" onclick="saveProduct()">Save Product & Quantity to Stock</button>
             </div>
             <div class="card" id="stock-report-section">
-                <h2>Active Stock Inventory & Alerts</h2>
+                <h2>Active Stock Inventory & Quantities</h2>
                 <div id="product-list"></div>
                 <button class="btn btn-pdf" onclick="downloadPDFReport('stock-report-section', 'Stock_Inventory.pdf')">📥 Download Stock PDF</button>
             </div>
@@ -535,7 +538,7 @@
         let currentStoreId = null;
         let currentStoreData = null;
         let deferredPrompt = null;
-        let activeCart = []; // Multi-item cart list
+        let activeCart = [];
 
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
@@ -796,7 +799,6 @@
             html2pdf().from(element).set(opt).save();
         }
 
-        // Multi-Item Cart Logic
         function addItemToCartByCode() {
             const codeInput = document.getElementById("cartItemCodeInput").value.trim();
             if (!codeInput) return;
@@ -807,7 +809,7 @@
                 if (existingItem) {
                     existingItem.qty += 1;
                 } else {
-                    activeCart.push({ code: found.code, name: found.name, price: Number(found.price), qty: 1 });
+                    activeCart.push({ id: found.id, code: found.code, name: found.name, price: Number(found.price), qty: 1, stock: Number(found.quantity || 0) });
                 }
                 document.getElementById("cartItemCodeInput").value = "";
                 renderCart();
@@ -875,6 +877,16 @@
             const amount = parseFloat(document.getElementById("billAmount").value) || 0;
             const mode = document.getElementById("billMode").value;
 
+            // Deduct stock quantities from database & local array
+            for (let item of activeCart) {
+                let currentProd = cloudProducts.find(p => p.id === item.id);
+                if (currentProd) {
+                    let newQty = Math.max(0, Number(currentProd.quantity || 0) - item.qty);
+                    await supabaseClient.from("products").update({ quantity: newQty }).eq("id", item.id);
+                    currentProd.quantity = newQty;
+                }
+            }
+
             const { data, error } = await supabaseClient.from("transactions").insert([{
                 store_id: currentStoreId, customer_name: customerName, type: mode === "Credit" ? "CREDIT" : "PAYMENT", details: detailsSummary, amount, payment_mode: mode, timestamp: new Date().toLocaleString()
             }]).select();
@@ -896,10 +908,11 @@
                     if (cData && cData[0]) cloudCustomers.push(cData[0]);
                 }
             }
-            alert("Cart Bill & Official Invoice saved & synced!");
+            alert("Cart Bill & Official Invoice saved, stock updated & synced!");
             document.getElementById("billCustomer").value = "";
             activeCart = [];
             renderCart();
+            renderInventory();
             
             renderTransactionsByDate();
             renderKhata();
@@ -966,19 +979,21 @@
             if (!currentStoreId) return;
             const code = document.getElementById("prodCode").value.trim();
             const name = document.getElementById("prodName").value.trim();
+            const quantity = parseFloat(document.getElementById("prodQty").value) || 0;
             const price = parseFloat(document.getElementById("prodPrice").value) || 0;
             if (!code || !name) return alert("Enter item code/barcode and variant name.");
 
-            const { data, error } = await supabaseClient.from("products").insert([{ store_id: currentStoreId, code, name, price }]).select();
+            const { data, error } = await supabaseClient.from("products").insert([{ store_id: currentStoreId, code, name, quantity, price }]).select();
             if (error) return alert("Error saving product: " + error.message);
 
             if (data && data[0]) {
                 cloudProducts.push(data[0]);
             }
 
-            alert("Product variant saved!");
+            alert("Product & stock quantity saved!");
             document.getElementById("prodCode").value = "";
             document.getElementById("prodName").value = "";
+            document.getElementById("prodQty").value = "";
             document.getElementById("prodPrice").value = "";
             renderInventory();
         }
@@ -990,15 +1005,16 @@
             renderInventory();
         }
 
-        async function editProduct(id, currentCode, currentName, currentPrice) {
+        async function editProduct(id, currentCode, currentName, currentQty, currentPrice) {
             const newCode = prompt("Edit Item Code:", currentCode);
             const newName = prompt("Edit Item Name:", currentName);
+            const newQty = prompt("Edit Stock Quantity:", currentQty);
             const newPrice = prompt("Edit Price (₹):", currentPrice);
-            if (!newCode || !newName || !newPrice) return;
+            if (!newCode || !newName || newQty === null || !newPrice) return;
 
-            await supabaseClient.from("products").update({ code: newCode, name: newName, price: parseFloat(newPrice) }).eq("id", id);
+            await supabaseClient.from("products").update({ code: newCode, name: newName, quantity: parseFloat(newQty), price: parseFloat(newPrice) }).eq("id", id);
             let prod = cloudProducts.find(p => p.id === id);
-            if (prod) { prod.code = newCode; prod.name = newName; prod.price = parseFloat(newPrice); }
+            if (prod) { prod.code = newCode; prod.name = newName; prod.quantity = parseFloat(newQty); prod.price = parseFloat(newPrice); }
             renderInventory();
         }
 
@@ -1117,14 +1133,18 @@
             const list = document.getElementById("product-list");
             list.innerHTML = cloudProducts.length ? "" : "<p style='color:#64748B;'>No stock items added.</p>";
             cloudProducts.forEach(p => {
+                const qtyVal = Number(p.quantity || 0);
+                const badgeClass = qtyVal <= 5 ? "tag tag-credit" : "tag tag-alert";
+                const badgeText = qtyVal <= 5 ? `Low Stock (${qtyVal})` : `Stock: ${qtyVal}`;
+
                 list.innerHTML += `
                     <div class="list-item">
                         <div>
                             <strong>[Code: ${p.code}] ${p.name}</strong><br>₹${p.price} 
-                            <span class="tag tag-alert" style="margin-left:6px;">In Stock</span>
+                            <span class="${badgeClass}" style="margin-left:6px;">${badgeText}</span>
                         </div>
                         <div class="action-btns">
-                            <button class="btn-warning" onclick="editProduct(${p.id}, '${p.code}', '${p.name}', ${p.price})">Edit</button>
+                            <button class="btn-warning" onclick="editProduct(${p.id}, '${p.code}', '${p.name}', ${qtyVal}, ${p.price})">Edit</button>
                             <button class="btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
                         </div>
                     </div>`;
