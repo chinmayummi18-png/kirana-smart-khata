@@ -153,8 +153,9 @@
             justify-content: space-around;
             padding: 8px 0;
             z-index: 100;
+            overflow-x: auto;
         }
-        .nav-item { text-align: center; font-size: 0.7rem; color: #64748B; cursor: pointer; flex: 1; }
+        .nav-item { text-align: center; font-size: 0.65rem; color: #64748B; cursor: pointer; flex: 1; min-width: 60px; }
         .nav-item.active { color: var(--accent); font-weight: bold; }
 
         .view { display: none; }
@@ -277,7 +278,6 @@
     <div class="container">
         <!-- VIEW 1: BILLING & CART INVOICE GENERATOR -->
         <div id="view-billing" class="view active">
-            <!-- Subscription & Membership Card -->
             <div class="card sub-card">
                 <h2>👑 App Membership & Subscription</h2>
                 <p id="trial-status-text" style="font-size: 0.85rem; color: #64748B; margin-bottom: 10px;">Checking trial status...</p>
@@ -296,7 +296,6 @@
                 </div>
             </div>
 
-            <!-- Daily Sales Report Card -->
             <div class="card report-card">
                 <h2>📊 Today's Sales Summary</h2>
                 <div class="report-grid">
@@ -316,7 +315,6 @@
                 <button class="btn btn-pdf" onclick="downloadPDFReport('view-billing', 'Daily_Sales_Report.pdf')">📥 Download Sales Report PDF</button>
             </div>
 
-            <!-- Morning Milk Quick-Add Card -->
             <div class="card milk-card">
                 <h2>🥛 Morning Milk Quick-Sale</h2>
                 <div class="form-group">
@@ -342,7 +340,6 @@
                 <button class="btn btn-milk" onclick="saveMilkTransaction()">Record Morning Milk Sale</button>
             </div>
 
-            <!-- Cart Multi-Item Counter Bill & Invoice Generator -->
             <div class="card invoice-card" id="invoice-bill-section">
                 <h2>🧾 Multi-Item Cart & Invoice Generator</h2>
                 <button class="btn btn-scanner" onclick="startScanner()">📷 Open Barcode Scanner</button>
@@ -401,10 +398,10 @@
             </div>
         </div>
 
-        <!-- VIEW 2: KHATA (DEBTORS & CREDITORS) -->
-        <div id="view-khata" class="view">
+        <!-- VIEW 2: DEDICATED DEBTORS PAGE -->
+        <div id="view-debtors" class="view">
             <div class="card debtor-card">
-                <h2>👥 Debtors (Customers Owning Money)</h2>
+                <h2>👥 Debtors Management (Customers Khata)</h2>
                 <div class="form-group">
                     <label>Customer Name</label>
                     <input type="text" id="debtorNameInput" placeholder="Customer Name">
@@ -420,47 +417,65 @@
                 <button class="btn btn-success" onclick="addNewDebtor()">Add New Debtor</button>
 
                 <div class="form-group" style="margin-top: 16px;">
-                    <input type="text" id="searchDebtor" placeholder="Search debtor..." oninput="renderKhata()">
+                    <label>🔍 Search Debtors</label>
+                    <input type="text" id="searchDebtor" placeholder="Type customer name to search..." oninput="renderDebtors()">
                 </div>
                 <div id="debtors-list"></div>
-                <button class="btn btn-pdf" onclick="downloadPDFReport('view-khata', 'Debtors_Ledger.pdf')">📥 Download Debtors Report PDF</button>
-            </div>
-
-            <div class="card creditor-card">
-                <h2>🏭 Creditors (Suppliers We Owe Money To)</h2>
-                <div class="form-group">
-                    <input type="text" id="supName" placeholder="Supplier Name (e.g. Amul Milk Agency)">
-                </div>
-                <div class="form-group">
-                    <input type="number" id="supDue" placeholder="Amount Owed to Supplier (₹)">
-                </div>
-                <button class="btn btn-secondary" onclick="saveCreditor()">Add / Update Creditor</button>
-                <div id="creditors-list" style="margin-top: 12px;"></div>
-                <button class="btn btn-pdf" onclick="downloadPDFReport('view-khata', 'Creditors_Ledger.pdf')">📥 Download Creditors Report PDF</button>
+                <button class="btn btn-pdf" onclick="downloadPDFReport('view-debtors', 'Debtors_Ledger.pdf')">📥 Download Debtors Report PDF</button>
             </div>
         </div>
 
-        <!-- VIEW 3: STOCK & INVENTORY -->
+        <!-- VIEW 3: DEDICATED CREDITORS PAGE -->
+        <div id="view-creditors" class="view">
+            <div class="card creditor-card">
+                <h2>🏭 Creditors Management (Suppliers)</h2>
+                <div class="form-group">
+                    <label>Supplier Name</label>
+                    <input type="text" id="supName" placeholder="Supplier Name (e.g. Amul Milk Agency)">
+                </div>
+                <div class="form-group">
+                    <label>Amount Owed (₹)</label>
+                    <input type="number" id="supDue" placeholder="0.00">
+                </div>
+                <button class="btn btn-secondary" onclick="saveCreditor()">Add / Update Creditor</button>
+                <div id="creditors-list" style="margin-top: 12px;"></div>
+                <button class="btn btn-pdf" onclick="downloadPDFReport('view-creditors', 'Creditors_Ledger.pdf')">📥 Download Creditors Report PDF</button>
+            </div>
+        </div>
+
+        <!-- VIEW 4: STOCK & INVENTORY (WITH RESTOCK MODE) -->
         <div id="view-inventory" class="view">
             <div class="card">
-                <h2>📦 Stock Management & Quantity Tracking</h2>
+                <h2>📦 Stock Management & Restock</h2>
+                <div class="form-group">
+                    <label>Select Existing Product to Restock</label>
+                    <select id="restockProductSelect" onchange="fillRestockData()">
+                        <option value="">— Select Existing Product —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Or Scan Barcode for New Item</label>
+                    <button class="btn btn-scanner" onclick="startStockScanner()">📷 Scan Barcode</button>
+                    <div id="stock-reader" class="hidden" style="margin-top:8px;"></div>
+                    <button id="closeStockScannerBtn" class="btn btn-danger hidden" onclick="stopStockScanner()">Close Camera</button>
+                </div>
                 <div class="form-group">
                     <label>Item Code / Barcode Number</label>
-                    <input type="text" id="prodCode" placeholder="e.g. 101 or barcode">
+                    <input type="text" id="prodCode" placeholder="Enter code or scan..." oninput="lookupStockItemByCode()">
                 </div>
                 <div class="form-group">
                     <label>Item Name & Size / Unit</label>
-                    <input type="text" id="prodName" placeholder="e.g. Milk 250ml Packet or Sugar 1kg">
+                    <input type="text" id="prodName" placeholder="e.g. Sugar 1kg">
                 </div>
                 <div class="form-group">
-                    <label>Stock Quantity (Units Purchased / Available)</label>
-                    <input type="number" id="prodQty" placeholder="0" min="0">
+                    <label>Quantity to Add (Purchased Stock)</label>
+                    <input type="number" id="prodQty" placeholder="e.g. 10" min="1" value="1">
                 </div>
                 <div class="form-group">
                     <label>Price per Unit (₹)</label>
                     <input type="number" id="prodPrice" placeholder="0.00">
                 </div>
-                <button class="btn" onclick="saveProduct()">Save Product & Quantity to Stock</button>
+                <button class="btn btn-success" onclick="saveStockPurchase()">📥 Save Stock / Restock</button>
             </div>
             <div class="card" id="stock-report-section">
                 <h2>Active Stock Inventory & Quantities</h2>
@@ -469,7 +484,7 @@
             </div>
         </div>
 
-        <!-- VIEW 4: PROFIT & EXPENSES -->
+        <!-- VIEW 5: PROFIT & EXPENSES -->
         <div id="view-profit" class="view">
             <div class="card profit-card">
                 <h2>💰 Net Profit & Loss Statement</h2>
@@ -509,7 +524,7 @@
             </div>
         </div>
 
-        <!-- VIEW 5: CALENDAR & HISTORY LEDGER -->
+        <!-- VIEW 6: CALENDAR & HISTORY LEDGER -->
         <div id="view-ledger" class="view">
             <div class="card">
                 <h2>📅 Calendar & Date Ledger</h2>
@@ -529,7 +544,8 @@
     <!-- Bottom Navigation Bar -->
     <div class="nav-bar">
         <div class="nav-item active" onclick="switchView('billing', this)">🛒 Billing</div>
-        <div class="nav-item" onclick="switchView('khata', this)">📖 Khata</div>
+        <div class="nav-item" onclick="switchView('debtors', this)">👥 Debtors</div>
+        <div class="nav-item" onclick="switchView('creditors', this)">🏭 Creditors</div>
         <div class="nav-item" onclick="switchView('inventory', this)">📦 Stock</div>
         <div class="nav-item" onclick="switchView('profit', this)">💰 P & L</div>
         <div class="nav-item" onclick="switchView('ledger', this)">📅 Calendar</div>
@@ -689,9 +705,11 @@
             document.getElementById('view-' + viewId).classList.add('active');
             element.classList.add('active');
             stopScanner();
+            stopStockScanner();
         }
 
         let html5QrCode = null;
+        let stockQrCode = null;
 
         function startScanner() {
             document.getElementById("reader").classList.remove("hidden");
@@ -708,7 +726,7 @@
                 },
                 (errorMessage) => {}
             ).catch(err => {
-                alert("Unable to access camera. Please check camera permissions.");
+                alert("Unable to access camera.");
             });
         }
 
@@ -724,6 +742,40 @@
             } else {
                 document.getElementById("reader").classList.add("hidden");
                 document.getElementById("closeScannerBtn").classList.add("hidden");
+            }
+        }
+
+        function startStockScanner() {
+            document.getElementById("stock-reader").classList.remove("hidden");
+            document.getElementById("closeStockScannerBtn").classList.remove("hidden");
+
+            stockQrCode = new Html5Qrcode("stock-reader");
+            stockQrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 150 } },
+                (decodedText) => {
+                    document.getElementById("prodCode").value = decodedText;
+                    lookupStockItemByCode();
+                    stopStockScanner();
+                },
+                (errorMessage) => {}
+            ).catch(err => {
+                alert("Unable to access camera.");
+            });
+        }
+
+        function stopStockScanner() {
+            if (stockQrCode) {
+                stockQrCode.stop().then(() => {
+                    document.getElementById("stock-reader").classList.add("hidden");
+                    document.getElementById("closeStockScannerBtn").classList.add("hidden");
+                }).catch(() => {
+                    document.getElementById("stock-reader").classList.add("hidden");
+                    document.getElementById("closeStockScannerBtn").classList.add("hidden");
+                });
+            } else {
+                document.getElementById("stock-reader").classList.add("hidden");
+                document.getElementById("closeStockScannerBtn").classList.add("hidden");
             }
         }
 
@@ -749,12 +801,32 @@
             cloudExpenses = exps.data || [];
 
             renderInventory();
-            renderKhata();
+            renderDebtors();
             renderCreditors();
             renderExpenses();
             renderTransactionsByDate();
+            populateRestockDropdown();
             calculateDailyReport();
             calculateProfitAndLoss();
+        }
+
+        function populateRestockDropdown() {
+            const select = document.getElementById("restockProductSelect");
+            select.innerHTML = '<option value="">— Select Existing Product to Restock —</option>';
+            cloudProducts.forEach(p => {
+                select.innerHTML += `<option value="${p.id}">${p.name} [Code: ${p.code}] (Stock: ${p.quantity || 0})</option>`;
+            });
+        }
+
+        function fillRestockData() {
+            const selectedId = document.getElementById("restockProductSelect").value;
+            if (!selectedId) return;
+            const found = cloudProducts.find(p => String(p.id) === selectedId);
+            if (found) {
+                document.getElementById("prodCode").value = found.code;
+                document.getElementById("prodName").value = found.name;
+                document.getElementById("prodPrice").value = found.price;
+            }
         }
 
         function calculateDailyReport() {
@@ -804,6 +876,50 @@
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
             html2pdf().from(element).set(opt).save();
+        }
+
+        function lookupStockItemByCode() {
+            const codeInput = document.getElementById("prodCode").value.trim();
+            const found = cloudProducts.find(p => String(p.code) === codeInput);
+            if (found) {
+                document.getElementById("prodName").value = found.name;
+                document.getElementById("prodPrice").value = found.price;
+                document.getElementById("restockProductSelect").value = found.id;
+            }
+        }
+
+        async function saveStockPurchase() {
+            if (!currentStoreId) return;
+            const code = document.getElementById("prodCode").value.trim();
+            const name = document.getElementById("prodName").value.trim();
+            const addQty = parseFloat(document.getElementById("prodQty").value) || 0;
+            const price = parseFloat(document.getElementById("prodPrice").value) || 0;
+
+            if (!code || !name || addQty <= 0) {
+                return alert("Enter valid item code, name, and quantity to add.");
+            }
+
+            let existingProd = cloudProducts.find(p => String(p.code) === code);
+
+            if (existingProd) {
+                let newTotalQty = Number(existingProd.quantity || 0) + addQty;
+                await supabaseClient.from("products").update({ quantity: newTotalQty, price: price > 0 ? price : existingProd.price }).eq("id", existingProd.id);
+                existingProd.quantity = newTotalQty;
+                alert(`Stock updated! Added ${addQty} units to ${name}. Total stock: ${newTotalQty}`);
+            } else {
+                const { data, error } = await supabaseClient.from("products").insert([{ store_id: currentStoreId, code, name, quantity: addQty, price }]).select();
+                if (error) return alert("Error saving stock: " + error.message);
+                if (data && data[0]) cloudProducts.push(data[0]);
+                alert(`New product added with ${addQty} units in stock!`);
+            }
+
+            document.getElementById("prodCode").value = "";
+            document.getElementById("prodName").value = "";
+            document.getElementById("prodQty").value = "1";
+            document.getElementById("prodPrice").value = "";
+            document.getElementById("restockProductSelect").value = "";
+            renderInventory();
+            populateRestockDropdown();
         }
 
         function addItemToCartByCode() {
@@ -940,9 +1056,10 @@
             activeCart = [];
             renderCart();
             renderInventory();
+            renderDebtors();
+            populateRestockDropdown();
             
             renderTransactionsByDate();
-            renderKhata();
             calculateDailyReport();
             calculateProfitAndLoss();
         }
@@ -979,7 +1096,7 @@
             document.getElementById("milkAmount").value = "";
             
             renderTransactionsByDate();
-            renderKhata();
+            renderDebtors();
             calculateDailyReport();
             calculateProfitAndLoss();
         }
@@ -999,30 +1116,7 @@
             document.getElementById("debtorNameInput").value = "";
             document.getElementById("debtorPhoneInput").value = "";
             document.getElementById("debtorDueInput").value = "";
-            renderKhata();
-        }
-
-        async function saveProduct() {
-            if (!currentStoreId) return;
-            const code = document.getElementById("prodCode").value.trim();
-            const name = document.getElementById("prodName").value.trim();
-            const quantity = parseFloat(document.getElementById("prodQty").value) || 0;
-            const price = parseFloat(document.getElementById("prodPrice").value) || 0;
-            if (!code || !name) return alert("Enter item code/barcode and variant name.");
-
-            const { data, error } = await supabaseClient.from("products").insert([{ store_id: currentStoreId, code, name, quantity, price }]).select();
-            if (error) return alert("Error saving product: " + error.message);
-
-            if (data && data[0]) {
-                cloudProducts.push(data[0]);
-            }
-
-            alert("Product & stock quantity saved!");
-            document.getElementById("prodCode").value = "";
-            document.getElementById("prodName").value = "";
-            document.getElementById("prodQty").value = "";
-            document.getElementById("prodPrice").value = "";
-            renderInventory();
+            renderDebtors();
         }
 
         async function deleteProduct(id) {
@@ -1030,6 +1124,7 @@
             await supabaseClient.from("products").delete().eq("id", id);
             cloudProducts = cloudProducts.filter(p => p.id !== id);
             renderInventory();
+            populateRestockDropdown();
         }
 
         async function editProduct(id, currentCode, currentName, currentQty, currentPrice) {
@@ -1043,6 +1138,7 @@
             let prod = cloudProducts.find(p => p.id === id);
             if (prod) { prod.code = newCode; prod.name = newName; prod.quantity = parseFloat(newQty); prod.price = parseFloat(newPrice); }
             renderInventory();
+            populateRestockDropdown();
         }
 
         async function saveCreditor() {
@@ -1072,7 +1168,7 @@
             if (!confirm("Delete this debtor khata record?")) return;
             await supabaseClient.from("customers").delete().eq("id", id);
             cloudCustomers = cloudCustomers.filter(c => c.id !== id);
-            renderKhata();
+            renderDebtors();
         }
 
         async function deleteTransaction(id) {
@@ -1103,7 +1199,7 @@
             if (data && data[0]) cloudTransactions.unshift(data[0]);
 
             alert(`Settlement recorded! New due for ${currentName} is ₹${newDue}`);
-            renderKhata();
+            renderDebtors();
             renderTransactionsByDate();
             calculateDailyReport();
         }
@@ -1187,7 +1283,7 @@
             });
         }
 
-        function renderKhata() {
+        function renderDebtors() {
             const search = document.getElementById("searchDebtor").value.toLowerCase();
             const list = document.getElementById("debtors-list");
             const filtered = cloudCustomers.filter(c => c.name.toLowerCase().includes(search));
