@@ -122,7 +122,7 @@
         .btn-milk { background-color: var(--milk); }
         .btn-scanner { background-color: #4F46E5; }
         .btn-pdf { background-color: #0284C7; font-size: 0.85rem; padding: 8px; margin-top: 8px; }
-        .btn-whatsapp { background-color: #25D366; text-decoration: none; display: inline-block; padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; color: white; margin-top: 4px;}
+        .btn-whatsapp { background-color: #25D366; text-decoration: none; display: inline-block; padding: 10px; font-size: 0.9rem; border-radius: 8px; color: white; margin-top: 8px; text-align: center; font-weight: bold; width: 100%; }
 
         .action-btns { display: flex; gap: 6px; align-items: center; }
 
@@ -360,6 +360,10 @@
                     <input type="text" id="billCustomer" placeholder="Customer Name">
                 </div>
                 <div class="form-group">
+                    <label>Customer Mobile Number (for WhatsApp Bill)</label>
+                    <input type="text" id="billCustomerPhone" placeholder="919876543210">
+                </div>
+                <div class="form-group">
                     <label>Scan or Enter Item Code to Add to Cart</label>
                     <input type="text" id="cartItemCodeInput" placeholder="Scan barcode or type code..." oninput="addItemToCartByCode()">
                 </div>
@@ -390,6 +394,9 @@
                     </select>
                 </div>
                 <button class="btn btn-success" onclick="saveCartTransaction()">Save Bill & Sync Cloud</button>
+                <div id="whatsapp-bill-action" class="hidden">
+                    <a id="whatsappBillLink" class="btn-whatsapp" href="#" target="_blank">💬 Send Bill via WhatsApp</a>
+                </div>
                 <button class="btn btn-pdf" onclick="downloadPDFReport('invoice-bill-section', 'Official_Invoice.pdf')">📥 Download Official Bill Invoice PDF</button>
             </div>
         </div>
@@ -873,6 +880,7 @@
             if (activeCart.length === 0) return alert("Cart is empty.");
 
             const customerName = document.getElementById("billCustomer").value.trim() || "Cash Customer";
+            const customerPhone = document.getElementById("billCustomerPhone").value.trim();
             const detailsSummary = activeCart.map(i => `${i.name} (Qty: ${i.qty})`).join(", ");
             const amount = parseFloat(document.getElementById("billAmount").value) || 0;
             const mode = document.getElementById("billMode").value;
@@ -902,13 +910,34 @@
                     await supabaseClient.from("customers").update({ due: Number(existing.due) + amount }).eq("id", existing.id);
                     existing.due = Number(existing.due) + amount;
                 } else {
-                    const newCust = { store_id: currentStoreId, name: customerName, phone: "", credit: amount, paid: 0, due: amount };
+                    const newCust = { store_id: currentStoreId, name: customerName, phone: customerPhone, credit: amount, paid: 0, due: amount };
                     const { data: cData } = await supabaseClient.from("customers").insert([newCust]).select();
                     if (cData && cData[0]) cloudCustomers.push(cData[0]);
                 }
             }
-            alert("Cart Bill with Quantities & Official Invoice saved, stock deducted & synced!");
+
+            // Generate WhatsApp Bill message link
+            let billText = `*${currentStoreData.name}* - Bill Invoice\n` +
+                           `Customer: ${customerName}\n` +
+                           `Date: ${new Date().toLocaleString()}\n` +
+                           `----------------------------------\n`;
+            activeCart.forEach(i => {
+                billText += `${i.name} x ${i.qty} = ₹${i.price * i.qty}\n`;
+            });
+            billText += `----------------------------------\n` +
+                        `*Grand Total: ₹${amount}*\n` +
+                        `Payment Mode: ${mode}\n` +
+                        `Thank you for shopping with us!`;
+
+            const encodedMsg = encodeURIComponent(billText);
+            const waLink = customerPhone ? `https://wa.me/${customerPhone}?text=${encodedMsg}` : `https://wa.me/?text=${encodedMsg}`;
+            
+            document.getElementById("whatsappBillLink").href = waLink;
+            document.getElementById("whatsapp-bill-action").classList.remove("hidden");
+
+            alert("Cart Bill saved, stock deducted & synced successfully!");
             document.getElementById("billCustomer").value = "";
+            document.getElementById("billCustomerPhone").value = "";
             activeCart = [];
             renderCart();
             renderInventory();
